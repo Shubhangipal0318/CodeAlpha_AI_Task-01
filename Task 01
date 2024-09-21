@@ -1,0 +1,92 @@
+import tkinter as tk
+from tkinter import ttk, scrolledtext
+from transformers import MarianMTModel, MarianTokenizer
+
+class TranslationTool:
+    def __init__(self, master):
+        self.master = master
+        master.title("Language Translation Tool")
+        master.geometry("600x400")
+
+        self.supported_languages = {
+            "English": "en",
+            "French": "fr",
+            "German": "de",
+            "Spanish": "es",
+            "Italian": "it",
+            "Portuguese": "pt"
+        }
+
+        self.models = {}
+
+        # Source language selection
+        ttk.Label(master, text="Source Language:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.source_lang = ttk.Combobox(master, values=list(self.supported_languages.keys()), state="readonly")
+        self.source_lang.grid(row=0, column=1, padx=5, pady=5, sticky="we")
+        self.source_lang.set("English")
+
+        # Target language selection
+        ttk.Label(master, text="Target Language:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        self.target_lang = ttk.Combobox(master, values=list(self.supported_languages.keys()), state="readonly")
+        self.target_lang.grid(row=1, column=1, padx=5, pady=5, sticky="we")
+        self.target_lang.set("French")
+
+        # Source text input
+        ttk.Label(master, text="Source Text:").grid(row=2, column=0, padx=5, pady=5, sticky="nw")
+        self.source_text = scrolledtext.ScrolledText(master, wrap=tk.WORD, width=50, height=5)
+        self.source_text.grid(row=2, column=1, padx=5, pady=5, sticky="nswe")
+
+        # Translate button
+        self.translate_button = ttk.Button(master, text="Translate", command=self.translate)
+        self.translate_button.grid(row=3, column=0, columnspan=2, padx=5, pady=5)
+
+        # Target text output
+        ttk.Label(master, text="Translated Text:").grid(row=4, column=0, padx=5, pady=5, sticky="nw")
+        self.target_text = scrolledtext.ScrolledText(master, wrap=tk.WORD, width=50, height=5)
+        self.target_text.grid(row=4, column=1, padx=5, pady=5, sticky="nswe")
+
+        # Configure grid weights
+        master.grid_columnconfigure(1, weight=1)
+        master.grid_rowconfigure(2, weight=1)
+        master.grid_rowconfigure(4, weight=1)
+
+    def get_model(self, source_lang, target_lang):
+        model_name = f'Helsinki-NLP/opus-mt-{source_lang}-{target_lang}'
+        if model_name not in self.models:
+            self.models[model_name] = {
+                'tokenizer': MarianTokenizer.from_pretrained(model_name),
+                'model': MarianMTModel.from_pretrained(model_name)
+            }
+        return self.models[model_name]
+
+    def translate(self):
+        source_lang = self.supported_languages[self.source_lang.get()]
+        target_lang = self.supported_languages[self.target_lang.get()]
+        source_text = self.source_text.get("1.0", tk.END).strip()
+
+        if not source_text:
+            self.target_text.delete("1.0", tk.END)
+            self.target_text.insert(tk.END, "Please enter some text to translate.")
+            return
+
+        try:
+            model_dict = self.get_model(source_lang, target_lang)
+            tokenizer = model_dict['tokenizer']
+            model = model_dict['model']
+
+            # Tokenize the input text
+            translated = model.generate(**tokenizer(source_text, return_tensors="pt", padding=True))
+
+            # Decode the generated tokens to text
+            translated_text = [tokenizer.decode(t, skip_special_tokens=True) for t in translated]
+
+            self.target_text.delete("1.0", tk.END)
+            self.target_text.insert(tk.END, translated_text[0])
+        except Exception as e:
+            self.target_text.delete("1.0", tk.END)
+            self.target_text.insert(tk.END, f"An error occurred: {str(e)}")
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    translation_tool = TranslationTool(root)
+    root.mainloop()
